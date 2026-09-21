@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+results/*
+!results/.gitkeep
+data/kinetics/**
+!data/kinetics/.gitkeep
