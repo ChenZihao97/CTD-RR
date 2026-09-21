@@ -123,16 +123,7 @@ Two baselines carry names that are swapped relative to their paper titles:
 (ICDM 2018), and **DynaTD** is the method of *"On the Discovery of Evolving
 Truth"* (KDD 2015). Each is used as its own authors named it.
 
-## Citation
 
-```bibtex
-@inproceedings{ctdrr2027,
-  title     = {},
-  author    = {},
-  booktitle = {ICASSP},
-  year      = {2027}
-}
-```
 
 ## License
 
