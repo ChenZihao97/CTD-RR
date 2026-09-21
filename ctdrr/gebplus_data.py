@@ -1,53 +1,21 @@
 """
-gebplus_data.py
-===============
-Loader for the *raw* (version b) Kinetics-GEB+ release — the multi-annotator
-one, 170K boundaries over 12,434 videos.
-
-Provenance, because the README links matter here: the Google Drive links in
-`showlab/GEB-Plus` are dead (404), but `Yuxuan-W/GEB-plus` (pushed 2025-02-22)
-carries updated NTU SharePoint links.  The raw folder resolves to
-`/personal/yuxuan003_e_ntu_edu_sg/Documents/Public/GEBC/dataset/version b (raw)`
-and holds `{train,val,test}_all_annotation.json`.  Anonymous download needs the
-FedAuth cookie that the sharing link sets, after which the SharePoint REST API
-(`_api/web/GetFileByServerRelativePath(...)/$value`) serves the files.
+Loader for the raw (version b) multi-annotator Kinetics-GEB+ release.
 
 Layout:
 
     {"<video_id>[<kinetics class>]": [
-        {"f1_score": float,                      # this annotator's consistency
-         "boundary_list": [{"start_time", "end_time", "label",
-                            "subject", "status_before", "status_after",
+        {"f1_score": float,
+         "boundary_list": [{"start_time", "end_time", "label", "subject",
+                            "status_before", "status_after",
                             "action_of_cause"}, ...]},
         ...                                      # one entry per annotator
     ]}
 
-How this differs from Kinetics-GEBD, and why both are worth running:
-
-  * TASK DEFINITION.  GEB+ boundaries are *status changes* attached to a
-    subject and a caption ("Change of Action", "Change of Subject", ...).
-    Kinetics-GEBD boundaries are generic event boundaries and include shot
-    changes.  The two are separate annotation rounds over overlapping videos,
-    so each is an independent reference for the other.
-  * DENSITY.  ~3.15 marks per annotator here against ~4.6 in GEBD, on the same
-    10 s clips — so GEB+ is the sparser, more selective corpus.
-  * PANEL SIZE.  1 to 9 annotators per video (mode 5), against a near-uniform 5
-    in GEBD.  That variation is useful: it lets reliability weighting be
-    measured against the number of annotators actually available.
-
-What it shares with GEBD: the clips have no order, so CTD-RR's Gaussian window
-over segment index has nothing to smooth along here either.
-
-WHERE IT DIFFERS, AND IT MATTERS: GEB+ does NOT list its annotators in an
-arbitrary order.  Every video's annotator list is sorted by `f1_score`
-descending - verified on 100% of videos, mean f1_score by slot 0.710 / 0.686 /
-0.652 / 0.605 / 0.513.  So slot index here is a QUALITY RANK, not an anonymous
-label, and it is a rank derived from inter-annotator agreement.  Every method
-that carries one weight per source across the corpus (CTD-RR's `global` and
-`window` estimators; CRH, GTM, CATD, DynaTD and KDEm) is therefore handed real
-information that Kinetics-GEBD does not contain.  `shuffle_slots` exists to
-control for exactly this, and results on GEB+ should be read with the shuffled
-numbers beside the natural ones.
+GEB+ boundaries are status changes attached to a subject, annotated over
+clips that also appear in Kinetics-GEBD, by panels of one to nine annotators.
+The release lists each clip's annotators in order of their `f1_score`;
+`shuffle_slots` randomises that order for methods whose output could otherwise
+depend on it.
 """
 
 import os
@@ -91,21 +59,9 @@ def load_gebplus_raw(split='val', min_annotators=3, min_f1=0.0,
     preprocessing uses for its range labels.
 
     `shuffle_slots` (an int seed) permutes the annotator order within every
-    video.  THIS IS NOT COSMETIC.  Unlike Kinetics-GEBD, whose annotator list
-    order is arbitrary, GEB+ ships its annotators SORTED BY `f1_score`
-    DESCENDING - verified on 100% of videos, with mean f1_score by slot running
-    0.710 / 0.686 / 0.652 / 0.605 / 0.513.  So slot index is a quality rank,
-    and any method that pools a source's statistics across videos (CTD-RR's
-    `global` and `window` estimators, and CRH / GTM / CATD / DynaTD / KDEm,
-    which all hold one weight per source corpus-wide) is handed a genuine
-    signal that the corpus would not contain if the annotators were listed in
-    collection order.  Worse, `f1_score` is itself derived from inter-annotator
-    agreement, so the ordering leaks agreement into the slot index.
-
-    Shuffling the slots destroys that artifact and nothing else, which makes it
-    the control that separates "pooling helps because per-annotator evidence is
-    thin" from "pooling helps because the release sorted the annotators for
-    us".  See `run_gebplus_slot_control.py`.
+    clip.  The release lists each clip's annotators in order of their
+    `f1_score`, so the slot index is not arbitrary; shuffling removes that
+    ordering for methods whose output could otherwise depend on it.
 
     No further filtering is applied.  Kinetics-GEBD has a published
     preprocessing rule (`min_change_duration`, shot-range merging) and it is

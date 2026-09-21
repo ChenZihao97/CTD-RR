@@ -1,83 +1,31 @@
 """
-reliability.py
-=========
-CTD-RR for corpora that have no annotator identity and no segment order.
+Reliability estimation for CTD-RR.
 
-WHY THE PUBLISHED METHOD DOES NOT TRANSFER
-------------------------------------------
-CTD-RR estimates a per-annotator, per-segment precision lambda_{j,t}, and gets
-it to be estimable at all by smoothing the sufficient statistics over a
-Gaussian window in *segment index*:
+The M-step needs a precision lambda_{j,t} for every (annotator, segment) pair,
+estimated from the few residuals that pair contributes.  `estimator` selects
+where the extra strength for that estimate is borrowed from:
 
-    lambda_{j,t} = min( Nbar_{j,t} / Sbar_{j,t} , cap ),
-    Nbar_{j,t}   = sum_{t'} w(t,t') N_{j,t'} / sum_{t'} w(t,t'),
-    w(t,t')      = exp( -(t-t')^2 / 2 sigma_W^2 ).
+    'window'        a Gaussian window over segment index, for fixed annotators
+                    labelling the corpus in order
+    'shrink_log'    shrinkage toward the corpus centre in log-variance space,
+                    for anonymous panels with neither identity nor order
+    'shrink'        the same shrinkage in linear variance space
+    'shrink_mix'    shrinkage toward a two-component mixture centre
+    'shrink_f1'     shrinkage toward a centre regressed on the corpus's own
+                    annotator consistency score
+    'video_shared'  one precision per segment, shared by its annotators
+    'nowin'         per-pair maximum likelihood, no regularization
+    'global'        one precision per annotator slot, pooled over the corpus
+    'uniform'       no reliability weighting
+    'eb', 'eb_video', 'eb_window'
+                    empirical-Bayes Gamma prior variants
 
-That works on the MedVid corpus because two things hold: annotator j is the
-same person in every segment, and consecutive indices are segments annotated
-close together, so a drifting reliability is locally almost constant.
+All of them have the same form,
 
-Neither holds on Kinetics-GEBD or GEB+.  Annotators are anonymous and
-video-local - slot j in one clip is a different person from slot j in the next
-- and the clips have no order at all.  The window would be averaging unrelated
-people's statistics in an arbitrary sequence.  Setting W -> 0 is not a fix
-either: a single annotator contributes ~5 marks to a 10 s clip, so the
-per-video statistics that remain are far too noisy to weight anybody by.
+    lambda = (pseudo-count + own count) / (pseudo-error + own error),
 
-THE REPLACEMENT
----------------
-The window is one way to buy an estimate of lambda_{j,t} more data than the
-segment itself provides.  Neighbouring segments are only ONE source of that
-strength.  The other, which needs neither identity nor order, is the corpus
-population: reliabilities across all (annotator, video) pairs are draws from
-some distribution, and a pair's own noisy estimate can be shrunk toward it.
-
-Put a conjugate Gamma prior on the precision and fit it by empirical Bayes:
-
-    lambda_{j,t} ~ Gamma(a, b)                     (shape a, rate b)
-    S_{j,t} | lambda ~ Gamma(n_{j,t}/2, lambda/2)   (weighted residuals)
-
-    posterior mean:  lambda_{j,t} = (a + n_{j,t}/2) / (b + S_{j,t}/2)
-
-with (a, b) re-fitted at every M-step from the corpus-wide (j,t) statistics.
-Writing it beside the window makes the relationship exact - both are
-
-    lambda = (pseudo-count + own count) / (pseudo-error + own error)
-
-and they differ only in where the pseudo-counts come from: a neighbourhood in
-index space, or the corpus-wide population.  The prior version degrades
-gracefully as n -> 0 (it returns the population mean rather than a fallback
-constant) and needs no precision cap, because a source cannot reach infinite
-precision by agreeing exactly on its two marks.
-
-HOW (a, b) ARE FITTED.  Not by maximising the marginal likelihood: on GEBD
-that is degenerate, because with ~4.4 marks per annotator per clip the spread
-of lambda-hat sits only 13% above what chi-square sampling noise alone
-produces, and the likelihood has a flat ridge along a -> infinity that collapses
-every precision to the population mean.  `fit_gamma_prior_moment` instead
-matches that 13% excess directly - Var(log lambda-hat) = trigamma(n/2) +
-trigamma(a) splits sampling noise from real heterogeneity - which is well
-determined.  The MLE is kept as `eb_fit='mle'` so the degeneracy is reportable
-rather than hidden.
-
-`estimator` selects between:
-
-    'window'   the published CTD-RR (index Gaussian window)
-    'nowin'    per-segment statistics only (the W -> 0 ablation)
-    'global'   one precision per annotator slot, pooled over the corpus
-    'eb'       the empirical-Bayes prior above, towards the CORPUS mean
-    'eb_video' the same prior, but towards each VIDEO's own mean precision,
-               so that within-video contrasts between annotators survive
-               the shrinkage                                     <- proposed
-    'eb_window' both: window-smoothed statistics, then shrunk to the prior
-                (on an ordered corpus with stable annotators this is the
-                strictly more general model; on GEBD it should reduce to 'eb')
-    'uniform'  reliability weighting removed entirely
-
-On Kinetics-GEBD two of these double as correctness checks.  'global' pools a
-different person's statistics under each slot, so it should buy nothing over
-'nowin'; and 'window' on a corpus with no order should be insensitive to a
-shuffle of the video list.  Both are reported.
+and differ only in where the pseudo-counts come from.  `ctd_run` is the entry
+point; it takes the estimator name and its hyperparameters.
 """
 
 import numpy as np
@@ -299,14 +247,9 @@ def fit_gamma_prior(n_eff, S, a0=2.0, b0=1.0, min_n=1e-3):
     Optimised over (log a, log b) so both stay positive.  Pairs with no
     responsibility mass carry no information and are dropped.
 
-    KNOWN TO BE DEGENERATE ON GEBD, and kept only so the degeneracy can be
-    reported rather than hidden.  With ~4.4 effective marks per annotator per
-    10 s clip the observed Var(log lambda-hat) is 1.15 against a chi-square
-    sampling prediction of 1.02 - a 13% excess - and the likelihood has a flat
-    ridge along a -> infinity at fixed a/b, so L-BFGS returns a ~ 1e7 and every
-    lambda collapses to the population mean.  That is the model reading a weak
-    heterogeneity signal as none at all.  The moment fit above targets the 13%
-    directly and is well determined.
+    Where the per-pair evidence is thin the likelihood is close to flat along
+    a -> infinity at fixed a/b, which drives every precision to the population
+    mean; the moment fit above is the better-determined alternative.
     """
     n = np.asarray(n_eff, dtype=float).ravel()
     s = np.asarray(S, dtype=float).ravel()
@@ -405,7 +348,7 @@ def corpus_mean_variance(N_eff, S, min_n=1e-10):
 
 def shrunk_precision(N_eff, S, m_pseudo, sigma2_bar, precision_cap=None):
     """
-    The spec'd M-step, per (video, slot):
+    Shrinkage in linear variance space, per (segment, annotator):
 
         sigma2_jv = ( sum_k r_jk (t_jk - mu_k)^2  +  m sigma2_bar )
                     / ( sum_k r_jk  +  m )
@@ -724,17 +667,10 @@ def initialize_k(timestamps, N, J, k_rule='max'):
     """
     The base method's `initialize`, with the step-count rule made selectable.
 
-    `determine_K` in the published method is hard-coded to the MAX of the
-    non-zero annotator counts, on the reasoning that over-estimation is
-    recoverable by pruning while under-estimation loses steps permanently.
-    That reasoning holds on the MedVid corpus, where the matching tolerance is
-    2 s and a spurious component is usually pruned or merged.
-
-    It does NOT hold on Kinetics-GEBD, where the tolerance is 0.05 x 10 s =
-    0.5 s: with five annotators placing ~4.6 marks each on a 10 s clip, the max
-    rule proposes ~7 boundaries against a reference that carries ~3.4, and the
-    surplus is charged as false positives at a tolerance too tight for pruning
-    to rescue.
+    K is initialised to the MAX of the non-zero annotator counts: over-
+    estimation is recoverable by pruning, while under-estimation loses
+    boundaries permanently.  Which rule is best depends on the matching
+    tolerance relative to the annotators' mark density, so it is selectable.
 
     Every comparator tunes its own step-count rule -- CRH, GTM, CATD, EvolvT
     and DynaTD expose `K_rule`, while HDBSCAN, KDE+peaks and KDEm choose K

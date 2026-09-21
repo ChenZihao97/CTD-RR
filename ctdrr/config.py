@@ -19,7 +19,7 @@ RESULTS_DIR = Path(os.environ.get('CTDRR_RESULTS', REPO_ROOT / 'results'))
 # --- MedVid: the fixed, ordered panel (shipped with the repo) -------------
 MEDVID_DIR = DATA_DIR / 'medvid'
 MEDVID_ANNOTATORS = [MEDVID_DIR / f'annotator_{j}.json' for j in (1, 2, 3)]
-MEDVID_REFERENCE = MEDVID_DIR / 'reference_tierA.json'
+MEDVID_REFERENCE = MEDVID_DIR / 'reference.json'
 
 # --- Kinetics: the anonymous crowd panels (fetched, not redistributed) ----
 KINETICS_DIR = DATA_DIR / 'kinetics'

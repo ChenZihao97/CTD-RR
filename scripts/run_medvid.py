@@ -36,7 +36,6 @@ from ctdrr.medvid_eval import (per_sample_counts, aggregate,  # noqa: E402
                                delta_k)
 
 OURS = 'CTD-RR (ours)'
-REFERENCE = 'R2_verified'
 TOLS = [1.0, 2.0]
 TUNING_TOL = 2.0
 
@@ -44,8 +43,8 @@ _G = {}
 
 
 def _init():
-    data, s2i, refs, pools, elig = medvid.load_all()
-    _G.update(data=data, s2i=s2i, pools=pools, elig=elig)
+    data, s2i, pool, elig = medvid.load_all()
+    _G.update(data=data, s2i=s2i, pool=pool, elig=elig)
 
 
 def _predict(name, cfg):
@@ -61,7 +60,7 @@ def _score(name, cfg, sids):
         truths = _predict(name, cfg)
     except Exception:
         return None
-    c = per_sample_counts(truths, _G['pools'][REFERENCE], sids, _G['s2i'],
+    c = per_sample_counts(truths, _G['pool'], sids, _G['s2i'],
                           [TUNING_TOL])
     return aggregate(c, sids, [TUNING_TOL])['f1_at'][TUNING_TOL]['f1']
 
@@ -76,7 +75,7 @@ def _one(job):
         lambda kw: _score(name, kw, tune_sids), grid)
 
     truths = _predict(name, cfg)
-    pool = _G['pools'][REFERENCE]
+    pool = _G['pool']
     c = per_sample_counts(truths, pool, test_sids, _G['s2i'], TOLS)
     a = aggregate(c, test_sids, TOLS)
     return {
@@ -114,8 +113,7 @@ def main():
     P('Fixed, ordered panel -- 10 held-out splits of 500 tuning / 500 test')
     P(f'{datetime.datetime.now():%Y-%m-%d %H:%M:%S}')
     P('=' * 88)
-    P(f'reference: {REFERENCE}   methods: {len(names)}   '
-      f'seeds: {args.seeds}\n')
+    P(f'methods: {len(names)}   seeds: {args.seeds}\n')
 
     jobs = [(n, s) for s in range(args.seeds) for n in names]
     t0 = time.time()
@@ -169,7 +167,7 @@ def main():
             P(o)
 
     out = RESULTS_DIR / f'medvid_{stamp}.json'
-    json.dump({'reference': REFERENCE, 'seeds': args.seeds, 'rows': rows},
+    json.dump({'seeds': args.seeds, 'rows': rows},
               open(out, 'w', encoding='utf-8'), indent=1, default=float)
     P(f'\nTotal {time.time() - t0:.0f}s -> {out}')
     log.close()

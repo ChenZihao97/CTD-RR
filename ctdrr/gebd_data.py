@@ -1,34 +1,19 @@
 """
-gebd_data.py
-============
-Loaders for the *raw* human annotations of Kinetics-GEBD, plus the GEB+
-(Kinetics-GEB+) boundary set used here as an external reference.
+Loader for the raw human annotations of Kinetics-GEBD.
 
-Kinetics-GEBD raw annotation layout (k400_{train,val}_raw_annotation.pkl):
+Raw layout (k400_{train,val}_raw_annotation.pkl):
 
     {video_id: {'num_frames', 'path_video', 'fps', 'video_duration',
                 'f1_consis': [per-annotator consistency],
                 'f1_consis_avg': float,
                 'substages_timestamps': [ann_0, ann_1, ...]}}
 
-where each ann is a list of {'start_time', 'end_time', 'label'}.  Labels are
-'EventChange (Timestamp/Range): ...', ' ShotChangeImmediateTimestamp: ...' or
-' ShotChangeGradualRange: ...'; the last is an interval rather than an instant.
+where each annotation is a list of {'start_time', 'end_time', 'label'}.
 
-Three properties of this corpus drive everything downstream and are worth
-stating plainly, because they are what make it a different regime from the
-MedVid segment corpus:
-
-  1. ANNOTATORS ARE ANONYMOUS AND VIDEO-LOCAL.  Nothing identifies annotator 0
-     of one video with annotator 0 of another; the list order is arbitrary.
-     Any per-annotator quantity is therefore only defined *within* a video.
-  2. THERE IS NO ORDER OVER VIDEOS.  Clips are independent 10 s Kinetics
-     samples, so "neighbouring index" carries no meaning.
-  3. THERE IS NO GROUND TRUTH.  The dataset's own protocol scores a prediction
-     against the annotators themselves.
-
-(1) and (2) together are why CTD-RR's Gaussian window over segment index has
-nothing to smooth over here - see reliability.py for the replacement.
+Annotators are anonymous and clip-local: slot j in one clip is not the same
+person as slot j in another, and the clips carry no order, so per-annotator
+quantities are defined only within a clip.  `official_preprocess` follows the
+preprocessing released by the corpus authors.
 """
 
 import os
@@ -281,17 +266,12 @@ def to_annotator_data(videos, J=None):
     annotators leave the surplus slots empty, which every method already
     treats as "this source made no claim".
 
-    IMPORTANT: slot j is *not* a person.  Kinetics-GEBD does not identify
-    annotators across videos, so slot j only means "the j-th annotation of this
-    video".  Methods that pool a source's statistics across videos (CRH, GTM,
-    CATD, DynaTD, and CTD-RR's `global` variant) are pooling over a different
-    person each time.  This is a property of the corpus, not of the loader.
+    Slot j is not a person: Kinetics-GEBD does not identify annotators
+    across clips, so slot j means only "the j-th annotation of this clip".
 
-    `step_caption_boundary` carries a float here rather than the 'MM:SS' string
-    the MedVid corpus uses; GEBD boundaries are sub-second on 10 s clips with a
-    ~0.5 s tolerance, so integer-second strings would destroy the signal.  See
-    `em.time_to_sec` passes numeric boundaries through unchanged, so
-    `extract_annotations` reads them directly.
+    `step_caption_boundary` carries a float here rather than the 'MM:SS'
+    string the fixed panel uses; `em.time_to_sec` passes numbers through
+    unchanged.
     """
     if J is None:
         J = max(len(v['anns']) for v in videos)

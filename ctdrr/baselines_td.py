@@ -52,16 +52,11 @@ how it enters the truth.
 KDEm is the exception, and deliberately so.  KDEm was designed to output a
 *set* of "opinions" per entity rather than a single truth, so it needs no
 K-rule and no alignment: one segment is one entity, every annotator mark is a
-claim, and the discovered modes are the boundaries.  That is the faithful
-adaptation, and it gives KDEm a genuine structural advantage here.
+claim, and the discovered modes are the boundaries.
 
-A note on what these methods can and cannot express, since it is the point of
-the comparison: CRH, GTM, CATD and KDEm all estimate ONE reliability number per
-source for the whole corpus.  DynaTD adds temporal dynamics, but on the *truth*
-(a Kalman state that evolves), not on the source: its source quality
-sigma_i^2 is constant over the whole timeline.  None of the five can express a
-reliability that varies within a source over the corpus, which is what CTD-RR's
-windowed precision estimates.
+CRH, GTM, CATD and KDEm estimate one reliability number per source for the
+whole corpus.  DynaTD adds temporal dynamics on the truth -- a Kalman state
+that evolves -- while its source quality stays constant over the timeline.
 
 Sources for the formulas are given per method.  Where the widely-circulated
 reference code (github.com/MengtingWan/KDEm, by the KDEm author, which ships

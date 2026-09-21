@@ -39,14 +39,14 @@ def check(name, ok, detail):
 
 def main():
     print('loading the fixed panel ...')
-    data, s2i, refs, pools, elig = medvid.load_all()
+    data, s2i, pool, elig = medvid.load_all()
     print(f'  {len(data)} annotators, {len(data[0])} samples, '
           f'{len(elig)} eligible for evaluation\n')
 
     # ---- 1. the reported number ----------------------------------------
     test_sids, _ = medvid.split_for(PAPER_SEED, elig)
     truths = ctd_run(data, estimator='window', k_rule='max', **PAPER_CFG)
-    c = per_sample_counts(truths, pools['R2_verified'], test_sids, s2i, [2.0])
+    c = per_sample_counts(truths, pool, test_sids, s2i, [2.0])
     f1 = aggregate(c, test_sids, [2.0])['f1_at'][2.0]['f1']
     check('reported number', abs(f1 - PAPER_F1) < 1e-9,
           f'F1@2s = {f1:.12f}, expected {PAPER_F1:.12f} '

@@ -1,31 +1,22 @@
 """
-Unified Truth Discovery for Temporal Step Boundary Annotation (v8-base)
+Core EM for CTD-RR.
 
-Refactored from v7 to support experiments:
-  - Core algorithm wrapped as a callable `run_truth_discovery_core` that
-    accepts an arbitrary list of annotator datasets (J >= 2). This enables
-    proper leave-one-out evaluation by re-running the full method on subsets.
-  - Evaluation expanded with four internal-consistency metrics:
-      A. Proper Leave-One-Out MAE
-      B. Pairwise Inter-Annotator MAE (model-free reference)
-      C. Self-Consistency (truth from all annotators vs each annotator)
-      D. Annotator Quality Differential (lambda_jt summary)
-  - All algorithmic choices identical to v7.
+Each mark y_i from annotator j on segment t is drawn from one of K_t Gaussian
+components, one per latent boundary:
 
-Model (unchanged from v7):
-  Each timestamp y_i^(j) from annotator j on video t is drawn from one of
-  K_t Gaussian components (one per true step):
+    p(y_i | boundary k) = N(y_i; X*_k, 1 / lambda_{j,t})
 
-    p(y_i | step k) = N(y_i; X*_k, 1/lambda_jt)
+E-step -- soft correspondence of marks to boundaries:
 
-  Soft alignment via responsibilities:
-    r_ik proportional to N(y_i; X*_k, 1/lambda_jt)
+    r_ik  proportional to  N(y_i; X*_k, 1 / lambda_{j,t})
 
-  Truth update (precision-weighted mean):
-    X*_k = sum_j lambda_jt * sum_i r_ik * y_i / sum_j lambda_jt * sum_i r_ik
+Truth update -- reliability-weighted mean of the marks assigned to k:
 
-  Precision update (Gaussian-window smoothed, capped):
-    lambda_jt = min( smoothed(N_eff_jt / S_jt), lambda_max )
+    X*_k = sum_j lambda_{j,t} sum_i r_ik y_i / sum_j lambda_{j,t} sum_i r_ik
+
+The precision update lives in reliability.py.  This module also holds the
+K initialisation, the pruning of unsupported components and the merging of
+degenerate ones.
 """
 
 import json
